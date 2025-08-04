@@ -834,37 +834,34 @@
 
                 ctx.fillRect(x, canvas.height - barHeight, currentBarThickness, barHeight); 
             }
-        }
 
-        // Function to capture current bar heights
-        function captureBarHeights() {
-            if (!isRecording) return;
+            // バーの描画直後に記録を行う
+            if (isRecording) {
+                const currentFrameBarHeights = [];
+                for (let i = 0; i < currentNumBars; i++) {
+                    const smoothingPointStart = Math.floor((i / currentNumBars) * numSmoothingPoints);
+                    const smoothingPointEnd = Math.ceil(((i + 1) / currentNumBars) * numSmoothingPoints);
 
-            const currentFrameBarHeights = [];
-            // 現在の表示されているバーの高さを取得
-            for (let i = 0; i < numBars; i++) {
-                const smoothingPointStart = Math.floor((i / numBars) * (numBars * 4));
-                const smoothingPointEnd = Math.ceil(((i + 1) / numBars) * (numBars * 4));
-
-                let sum = 0;
-                let count = 0;
-                for (let j = smoothingPointStart; j < smoothingPointEnd; j++) {
-                    if (j >= 0 && j < smoothedDisplayData.length) {
-                        sum += smoothedDisplayData[j];
-                        count++;
+                    let sum = 0;
+                    let count = 0;
+                    for (let j = smoothingPointStart; j < smoothingPointEnd; j++) {
+                        if (j >= 0 && j < numSmoothingPoints) {
+                            sum += smoothedDisplayData[j];
+                            count++;
+                        }
                     }
+
+                    let barHeight = count > 0 ? (sum / count) * barHeightScale : 0;
+
+                    if (freqCompensation > 0) {
+                        const freqPosition = i / (currentNumBars - 1);
+                        barHeight *= 1 + (freqPosition * freqCompensation);
+                    }
+
+                    currentFrameBarHeights.push(Math.floor(barHeight));
                 }
-
-                let barHeight = count > 0 ? (sum / count) * barHeightScale : 0;
-
-                if (freqCompensation > 0) {
-                    const freqPosition = i / (numBars - 1);
-                    barHeight *= 1 + (freqPosition * freqCompensation);
-                }
-
-                currentFrameBarHeights.push(Math.floor(barHeight));
+                recordedBarHeights.push(currentFrameBarHeights);
             }
-            recordedBarHeights.push(currentFrameBarHeights);
         }
 
         // Event listener for the "記録開始" button
@@ -886,29 +883,23 @@
                 audioPlayer.play();
                 recordStartButton.disabled = true;
                 saveBarHeightsButton.disabled = true;
-
-                const fps = parseInt(fpsInput.value);
-                const interval = Math.floor(1000 / fps);
-                recordingInterval = setInterval(captureBarHeights, interval);
             }
         });
 
-        // Stop recording and automatically save when audio is paused or ended
+        // Stop recording when audio is paused
         audioPlayer.addEventListener('pause', () => {
             isRecording = false;
-            if (recordingInterval) {
-                clearInterval(recordingInterval);
-                recordingInterval = null;
-            }
-            recordStartButton.disabled = false; // Re-enable record button
-            saveBarHeightsButton.disabled = false; // Re-enable save button
-            performSave(); // Automatically save the data
+            recordStartButton.disabled = false;
+            saveBarHeightsButton.disabled = false;
+            // performSave() を削除
         });
+
+        // Stop recording and automatically save when audio ends
         audioPlayer.addEventListener('ended', () => {
             isRecording = false;
-            performSave(); // Automatically save the data
-            recordStartButton.disabled = false; // Re-enable record button
-            saveBarHeightsButton.disabled = false; // Re-enable save button
+            performSave(); // 曲が終わったときだけ自動保存
+            recordStartButton.disabled = false;
+            saveBarHeightsButton.disabled = false;
         });
 
         saveBarHeightsButton.addEventListener('click', performSave); // Manual save button calls the same function
