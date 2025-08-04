@@ -346,6 +346,12 @@
         let targetFPS; 
         let lastFrameTime = 0; // For FPS control
 
+        // 記録関連の変数を追加
+        let audioStartTime = 0;
+        let lastRecordedAudioTime = 0;
+        let recordedFrameCountForLog = 0;
+        let lastLogTime = 0;
+
         // Array to hold smoothed display data
         let smoothedDisplayData;
         // Array to store recorded bar heights
@@ -835,32 +841,48 @@
                 ctx.fillRect(x, canvas.height - barHeight, currentBarThickness, barHeight); 
             }
 
-            // バーの描画直後に記録を行う
+            // 記録処理を変更
             if (isRecording) {
-                const currentFrameBarHeights = [];
-                for (let i = 0; i < currentNumBars; i++) {
-                    const smoothingPointStart = Math.floor((i / currentNumBars) * numSmoothingPoints);
-                    const smoothingPointEnd = Math.ceil(((i + 1) / currentNumBars) * numSmoothingPoints);
+                const desiredRecordingFps = targetFPS;
+                const recordingIntervalSeconds = 1 / desiredRecordingFps;
+                const currentAudioTime = audioContext.currentTime;
 
-                    let sum = 0;
-                    let count = 0;
-                    for (let j = smoothingPointStart; j < smoothingPointEnd; j++) {
-                        if (j >= 0 && j < numSmoothingPoints) {
-                            sum += smoothedDisplayData[j];
-                            count++;
+                // オーディオ時間に基づいて記録
+                while (currentAudioTime >= lastRecordedAudioTime + recordingIntervalSeconds) {
+                    const currentFrameBarHeights = [];
+                    for (let i = 0; i < currentNumBars; i++) {
+                        const smoothingPointStart = Math.floor((i / currentNumBars) * numSmoothingPoints);
+                        const smoothingPointEnd = Math.ceil(((i + 1) / currentNumBars) * numSmoothingPoints);
+
+                        let sum = 0;
+                        let count = 0;
+                        for (let j = smoothingPointStart; j < smoothingPointEnd; j++) {
+                            if (j >= 0 && j < numSmoothingPoints) {
+                                sum += smoothedDisplayData[j];
+                                count++;
+                            }
                         }
+
+                        let barHeight = count > 0 ? (sum / count) * barHeightScale : 0;
+
+                        if (freqCompensation > 0) {
+                            const freqPosition = i / (currentNumBars - 1);
+                            barHeight *= 1 + (freqPosition * freqCompensation);
+                        }
+
+                        currentFrameBarHeights.push(Math.floor(barHeight));
                     }
-
-                    let barHeight = count > 0 ? (sum / count) * barHeightScale : 0;
-
-                    if (freqCompensation > 0) {
-                        const freqPosition = i / (currentNumBars - 1);
-                        barHeight *= 1 + (freqPosition * freqCompensation);
-                    }
-
-                    currentFrameBarHeights.push(Math.floor(barHeight));
+                    recordedBarHeights.push(currentFrameBarHeights);
+                    recordedFrameCountForLog++;
+                    lastRecordedAudioTime += recordingIntervalSeconds;
                 }
-                recordedBarHeights.push(currentFrameBarHeights);
+
+                // 記録状況のログ表示（1秒ごと）
+                if (currentTime - lastLogTime >= 1000) {
+                    logMessage(`記録FPS (設定値: ${desiredRecordingFps}, 実測: ${recordedFrameCountForLog} frames/sec)`);
+                    recordedFrameCountForLog = 0;
+                    lastLogTime = currentTime;
+                }
             }
         }
 
@@ -879,6 +901,10 @@
             if (selectedFormat === 'waveform' || selectedFormat === 'sb3') {
                 isRecording = true;
                 recordedBarHeights = [];
+                audioStartTime = audioContext.currentTime;
+                lastRecordedAudioTime = audioStartTime;
+                recordedFrameCountForLog = 0;
+                lastLogTime = performance.now();
                 audioPlayer.currentTime = 0;
                 audioPlayer.play();
                 recordStartButton.disabled = true;
