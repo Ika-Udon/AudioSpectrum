@@ -351,10 +351,7 @@
         // Array to store recorded bar heights
         let recordedBarHeights = [];
         let isRecording = false;
-
-        // Store the fetched base SB3 file content and the selected audio file
-        let baseSb3Content = null;
-        let selectedAudioFile = null; // To store the File object of the selected audio
+        let recordingInterval = null; // 記録用のインターバルタイマー
 
         // Function to log messages to the sidebar
         function logMessage(message, type = 'info') {
@@ -627,22 +624,29 @@
         audioFile.addEventListener('change', (event) => {
             const file = event.target.files[0];
             if (file) {
-                selectedAudioFile = file; // Store the selected File object
+                selectedAudioFile = file;
                 const fileURL = URL.createObjectURL(file);
                 audioPlayer.src = fileURL;
-                audioPlayer.load(); // Load audio
+                audioPlayer.load();
 
-                // Initialize audio context once metadata is loaded
                 audioPlayer.addEventListener('loadedmetadata', () => {
                     initAudioContext();
-                    recordStartButton.disabled = false; // Enable record start button
-                    saveBarHeightsButton.disabled = false; // Enable save button
+                    recordStartButton.disabled = false;
+                    saveBarHeightsButton.disabled = false;
+                    requestAnimationFrame(drawSpectrum); // 波形表示を開始
                 }, { once: true });
             } else {
-                selectedAudioFile = null; // Clear selected file
+                selectedAudioFile = null;
                 recordStartButton.disabled = true;
                 saveBarHeightsButton.disabled = true;
-                audioPlayer.src = ""; // Clear audio player source
+                audioPlayer.src = "";
+            }
+        });
+
+        // Start spectrum drawing when audio is played
+        audioPlayer.addEventListener('play', () => {
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume();
             }
         });
 
@@ -829,15 +833,38 @@
                 ctx.fillStyle = `hsl(${currentHue}, 100%, ${lightness}%)`; 
 
                 ctx.fillRect(x, canvas.height - barHeight, currentBarThickness, barHeight); 
-                
-                // Record the bar height for this frame
+            }
+        }
+
+        // Function to capture current bar heights
+        function captureBarHeights() {
+            if (!isRecording) return;
+
+            const currentFrameBarHeights = [];
+            // 現在の表示されているバーの高さを取得
+            for (let i = 0; i < numBars; i++) {
+                const smoothingPointStart = Math.floor((i / numBars) * (numBars * 4));
+                const smoothingPointEnd = Math.ceil(((i + 1) / numBars) * (numBars * 4));
+
+                let sum = 0;
+                let count = 0;
+                for (let j = smoothingPointStart; j < smoothingPointEnd; j++) {
+                    if (j >= 0 && j < smoothedDisplayData.length) {
+                        sum += smoothedDisplayData[j];
+                        count++;
+                    }
+                }
+
+                let barHeight = count > 0 ? (sum / count) * barHeightScale : 0;
+
+                if (freqCompensation > 0) {
+                    const freqPosition = i / (numBars - 1);
+                    barHeight *= 1 + (freqPosition * freqCompensation);
+                }
+
                 currentFrameBarHeights.push(Math.floor(barHeight));
             }
-
-            // If recording is active, add the current frame's bar heights to the recorded data
-            if (isRecording) {
-                recordedBarHeights.push(currentFrameBarHeights);
-            }
+            recordedBarHeights.push(currentFrameBarHeights);
         }
 
         // Event listener for the "記録開始" button
@@ -854,28 +881,25 @@
 
             if (selectedFormat === 'waveform' || selectedFormat === 'sb3') {
                 isRecording = true;
-                recordedBarHeights = []; // Clear previous recordings
-                audioPlayer.currentTime = 0; // Reset audio to start
+                recordedBarHeights = [];
+                audioPlayer.currentTime = 0;
                 audioPlayer.play();
-                recordStartButton.disabled = true; // Disable record button while playing
-                saveBarHeightsButton.disabled = true; // Disable manual save button while recording
-                requestAnimationFrame(drawSpectrum);
-            }
-        });
+                recordStartButton.disabled = true;
+                saveBarHeightsButton.disabled = true;
 
-        // Start spectrum drawing when audio is played
-        audioPlayer.addEventListener('play', () => {
-            // This listener now primarily handles the visual drawing loop start
-            // and ensures audio context is running. Recording state is managed by recordStartButton.
-            if (audioContext && audioContext.state === 'suspended') {
-                audioContext.resume();
+                const fps = parseInt(fpsInput.value);
+                const interval = Math.floor(1000 / fps);
+                recordingInterval = setInterval(captureBarHeights, interval);
             }
-            requestAnimationFrame(drawSpectrum);
         });
 
         // Stop recording and automatically save when audio is paused or ended
         audioPlayer.addEventListener('pause', () => {
             isRecording = false;
+            if (recordingInterval) {
+                clearInterval(recordingInterval);
+                recordingInterval = null;
+            }
             recordStartButton.disabled = false; // Re-enable record button
             saveBarHeightsButton.disabled = false; // Re-enable save button
             performSave(); // Automatically save the data
