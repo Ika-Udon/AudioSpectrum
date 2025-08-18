@@ -454,58 +454,59 @@
 
         // Function to process recorded bar heights into the final string format
         function processRecordedBarHeights(heights) {
-            // This function now returns a flat array of strings, each representing a single processed bar height
-            // This is suitable for direct insertion into a Scratch list.
-            const processedFrames = [];
-            const interval = parseInt(intervalInput.value, 10) || 1; // Use value from new interval input
+    // This function now returns a flat array of strings, each representing a single processed bar height
+    // This is suitable for direct insertion into a Scratch list.
+    const processedFrames = [];
+    const interval = parseInt(intervalInput.value, 10) || 1; // Use value from new interval input
 
-            for (const frame of heights) {
-                const processedBarValues = [];
-                for (let i = 0; i < frame.length; i++) {
-                    if (i % interval === 0) { // Apply sampling interval
-                        const height = frame[i];
-                        const cappedHeight = Math.min(height, 315);
-                        const number = Math.floor(cappedHeight / 2);
-                        const result = Math.min(Math.round(number / 3), 52); // Ensure result does not exceed 52
+    for (const frame of heights) {
+        const processedBarValues = [];
+        for (let i = 0; i < frame.length; i++) {
+            if (i % interval === 0) { // Apply sampling interval
+                const height = frame[i];
+                const cappedHeight = Math.min(height, 315);
+                const number = Math.floor(cappedHeight / 2);
+                const result = Math.min(Math.round(number / 3), 52); // Ensure result does not exceed 52
 
-                        if (result === 0) {
-                            processedBarValues.push('"');
-                        } else if (result === 1) {
-                            processedBarValues.push('#');
-                        } else if (result === 2) {
-                            processedBarValues.push('$');
-                        } else if (result === 3) {
-                            processedBarValues.push('%');
-                        } else if (result === 4) {
-                            processedBarValues.push('&');
-                        } else if (result === 5) {
-                            processedBarValues.push("'");
-                        } else if (result === 6) {
-                            processedBarValues.push('(');
-                        } else if (result === 7) {
-                            processedBarValues.push(')');
-                        } else if (result === 8) {
-                            processedBarValues.push('=');
-                        } else if (result === 9) {
-                            processedBarValues.push('^');
-                        } else if (result === 10) {
-                            processedBarValues.push('!');
-                        } else if (result >= 11 && result <= 36) {
-                            processedBarValues.push(String.fromCharCode(96 + result - 10));
-                        } else if (result >= 37 && result <= 52) {
-                            processedBarValues.push(String.fromCharCode(64 + result - 36));
-                        }
-                    }
+                if (result === 0) {
+                    processedBarValues.push('"');
+                } else if (result === 1) {
+                    processedBarValues.push('#');
+                } else if (result === 2) {
+                    processedBarValues.push('$');
+                } else if (result === 3) {
+                    processedBarValues.push('%');
+                } else if (result === 4) {
+                    processedBarValues.push('&');
+                } else if (result === 5) {
+                    processedBarValues.push("'");
+                } else if (result === 6) {
+                    processedBarValues.push('(');
+                } else if (result === 7) {
+                    processedBarValues.push(')');
+                } else if (result === 8) {
+                    processedBarValues.push('=');
+                } else if (result === 9) {
+                    processedBarValues.push('^');
+                } else if (result === 10) {
+                    processedBarValues.push('!');
+                } else if (result >= 11 && result <= 36) {
+                    processedBarValues.push(String.fromCharCode(96 + result - 10));
+                } else if (result >= 37 && result <= 52) {
+                    processedBarValues.push(String.fromCharCode(64 + result - 36));
                 }
-                // Join all processed bar values for this frame into a single string
-                processedFrames.push(processedBarValues.join(''));
             }
-
-            // Filter out lines that are entirely double quotes
-            return processedFrames.filter(line => !(/^"+$/.test(line.trim())));
         }
+        // Join all processed bar values for this frame into a single string
+        processedFrames.push(processedBarValues.join(''));
+    }
 
-
+    // Instead of removing lines that are entirely double quotes (完全無音),
+    // convert them to an empty string so that a blank line / empty list item remains.
+    return processedFrames.map(line => {
+        return (/^"+$/.test(line.trim())) ? '' : line;
+    });
+}
         // Function to perform the saving logic
         async function performSave() {
             const selectedFormat = document.querySelector('input[name="recordFormat"]:checked').value;
@@ -938,6 +939,7 @@
     </script>
 </body>
 </html>
+
 
 
 
